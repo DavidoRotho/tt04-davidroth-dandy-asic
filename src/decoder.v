@@ -8,7 +8,7 @@ module triangle_wave_gen (
 reg [9:0] counter;
 reg up;
 
-always @(posedge clk or posedge reset) begin
+always @(posedge clk) begin
     if (reset) begin
         if (phase_shift) 
             counter <= 10'b0010000000; // 25% of the maximum value for 90-degree phase shift
