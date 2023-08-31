@@ -5,37 +5,42 @@ module triangle_wave_gen (
     input phase_shift
 );
 
-reg [9:0] counter;
-reg up;
+    reg [7:0] counter;
+    reg up;
 
-always @(posedge clk) begin
-    if (reset) begin
-        if (phase_shift) 
-            counter <= 10'b0010000000; // 25% of the maximum value for 90-degree phase shift
-        else
-            counter <= 10'b0; // Start at 0
-        
-        up <= 1;
-    end else begin
-        if (up) begin
-            if (counter == 10'b0011111111) begin // Maximum value for 8-bit up count
-                up <= 0; // Switch direction to down
-                counter <= counter - 1;
-            end else begin
-                counter <= counter + 1;
-            end
+    // Constants for clarity
+    parameter MAX_COUNTER_VALUE = 8'd255;  // Maximum value for 8-bit up count in decimal
+    parameter MIN_COUNTER_VALUE = 8'd0;    // Minimum value for 8-bit down count in decimal
+    parameter PHASE_SHIFT_VALUE = 8'd128;  // 25% of the maximum value for 90-degree phase shift
+
+    always @(posedge clk) begin
+        if (reset) begin
+            if (phase_shift) 
+                counter <= PHASE_SHIFT_VALUE;
+            else
+                counter <= MIN_COUNTER_VALUE;
+
+            up <= 1;
         end else begin
-            if (counter == 10'b0000000000) begin // Minimum value for 8-bit down count
-                up <= 1; // Switch direction to up
-                counter <= counter + 1;
+            if (up) begin
+                if (counter == MAX_COUNTER_VALUE) begin
+                    up <= 0; // Switch direction to down
+                    counter <= counter - 8'd1;
+                end else begin
+                    counter <= counter + 8'd1;
+                end
             end else begin
-                counter <= counter - 1;
+                if (counter == MIN_COUNTER_VALUE) begin
+                    up <= 1; // Switch direction to up
+                    counter <= counter + 8'd1;
+                end else begin
+                    counter <= counter - 8'd1;
+                end
             end
         end
     end
-end
 
-assign dac_out = counter[7:0];
+    assign dac_out = counter;
 
 endmodule
 
