@@ -56,14 +56,14 @@ module image_wave_gen (
         .clk(clk),
         .reset(reset),
         .dac_out(xdac),
-        .phase_shift(0)
+        .phase_shift(1'b0)
     );
     
     triangle_wave_gen triangle2 (
         .clk(clk),
         .reset(reset),
         .dac_out(ydac),
-        .phase_shift(1)
+        .phase_shift(1'b1)
     );
 
 
