@@ -33,7 +33,7 @@ async def test_7seg(dut):
 
     # reset
     dut.rst_n.value = 0
-    # set a different compare value
+    # set a different compare value 
     dut.ui_in.value = 3
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
