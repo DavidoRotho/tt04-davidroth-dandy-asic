@@ -1,48 +1,51 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
-
-
-segments = [ 63, 6, 91, 79, 102, 109, 124, 7, 127, 103 ]
+from cocotb.triggers import RisingEdge, Timer, ClockCycles
 
 @cocotb.test()
-async def test_7seg(dut):
-    dut._log.info("start")
+async def test_tt_um_dandy_dance(dut):
+    dut._log.info("Starting test...")
     clock = Clock(dut.clk, 10, units="us")
     cocotb.start_soon(clock.start())
 
-    # reset
-    dut._log.info("reset")
+    # Reset
+    dut._log.info("Applying reset...")
     dut.rst_n.value = 0
-    # set the compare value
-    dut.ui_in.value = 1
-    await ClockCycles(dut.clk, 10)
+    await ClockCycles(dut.clk, 9)  # 90us with a 10us clock
     dut.rst_n.value = 1
 
-    # the compare value is shifted 10 bits inside the design to allow slower counting
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
+    # Wait for 10us after reset de-assertion for the design to start its operation
+    # await Timer(10, units="us")
 
-        # all bidirectionals are set to output
-        assert dut.uio_oe == 0xFF
+    # Check the triangle wave
+    dut._log.info("Checking triangle wave...")
+    prev_x_value = int(dut.uo_out.value)
+    prev_y_value = int(dut.uio_out.value)
+    for _ in range(520):  # Enough cycles to see the wave go up and down
+        await RisingEdge(dut.clk)
+        curr_x_value = int(dut.uo_out.value)
+        curr_y_value = int(dut.uio_out.value)
+        
+        # Check x_out wave
+        if prev_x_value == 255:
+            assert curr_x_value == prev_x_value - 1
+        elif prev_x_value == 0:
+            assert curr_x_value == prev_x_value + 1
+        else:
+            assert abs(curr_x_value - prev_x_value) == 1
+        
+        # Check y_out wave
+        if prev_y_value == 255:
+            assert curr_y_value == prev_y_value - 1
+        elif prev_y_value == 0:
+            assert curr_y_value == prev_y_value + 1
+        else:
+            assert abs(curr_y_value - prev_y_value) == 1
+        
+        prev_x_value = curr_x_value
+        prev_y_value = curr_y_value
 
-    # reset
-    dut.rst_n.value = 0
-    # set a different compare value 
-    dut.ui_in.value = 3
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
+    # Check bidirectional enable path
+    assert int(dut.uio_oe.value) == 0xFF
 
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
-
+    dut._log.info("Test completed!")
