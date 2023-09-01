@@ -46,7 +46,7 @@ module triangle_wave_gen_fsm (
 
     always @(posedge clk) begin
         if (reset) begin
-            action_state = UP;
+            action_state <= UP;
             logic_state = UP;
             cycle_flag = 1'b0;
             instructions[0] = instructions_flat[0*3 +: 3];
