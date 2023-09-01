@@ -1,3 +1,4 @@
+
 // Instructions
 parameter C_NOP  = 3'd0;
 parameter C_LINE = 3'd1;
@@ -10,7 +11,7 @@ module triangle_wave_gen_fsm (
     input clk,
     input reset, // Active high reset
     input [11:0] instructions_flat,
-    input [32:0] params_flat,
+    input [31:0] params_flat,
     output [7:0] dac_out,
     input phase_shift
 );
@@ -126,21 +127,21 @@ module image_wave_gen (
     always @(*) begin
         x_instructions[0] <= C_JUMP;
         x_params[0]       <= 8'd250;
-        x_instructions[1] <= C_DCRE;
+        x_instructions[1] <= C_LINE;
         x_params[1]       <= 8'd100;
-        x_instructions[2] <= C_INCR;
+        x_instructions[2] <= C_DCRE;
         x_params[2]       <= 8'd90;
         x_instructions[3] <= C_NOP;
         x_params[3]       <= 8'd0;
         
-        x_instructions_flat[0*3 +: 3] = x_instructions[0];
-        x_instructions_flat[1*3 +: 3] = x_instructions[1];
-        x_instructions_flat[2*3 +: 3] = x_instructions[2];
-        x_instructions_flat[3*3 +: 3] = x_instructions[3];
-        x_params_flat[0*PARAM_SIZE +: PARAM_SIZE] = x_params[0];
-        x_params_flat[1*PARAM_SIZE +: PARAM_SIZE] = x_params[1];
-        x_params_flat[2*PARAM_SIZE +: PARAM_SIZE] = x_params[2];
-        x_params_flat[3*PARAM_SIZE +: PARAM_SIZE] = x_params[3];
+        x_instructions_flat[0*3 +: 3] <= x_instructions[0];
+        x_instructions_flat[1*3 +: 3] <= x_instructions[1];
+        x_instructions_flat[2*3 +: 3] <= x_instructions[2];
+        x_instructions_flat[3*3 +: 3] <= x_instructions[3];
+        x_params_flat[0*PARAM_SIZE +: PARAM_SIZE] <= x_params[0];
+        x_params_flat[1*PARAM_SIZE +: PARAM_SIZE] <= x_params[1];
+        x_params_flat[2*PARAM_SIZE +: PARAM_SIZE] <= x_params[2];
+        x_params_flat[3*PARAM_SIZE +: PARAM_SIZE] <= x_params[3];
     end
     
     reg [2:0] y_instructions[3:0];
@@ -159,16 +160,19 @@ module image_wave_gen (
         y_params[3]       <= 8'd0;
 
     
-        y_instructions_flat[0*3 +: 3] = y_instructions[0];
-        y_instructions_flat[1*3 +: 3] = y_instructions[1];
-        y_instructions_flat[2*3 +: 3] = y_instructions[2];
-        y_instructions_flat[3*3 +: 3] = y_instructions[3];
-        y_params_flat[0*PARAM_SIZE +: PARAM_SIZE] = y_params[0];
-        y_params_flat[1*PARAM_SIZE +: PARAM_SIZE] = y_params[1];
-        y_params_flat[2*PARAM_SIZE +: PARAM_SIZE] = y_params[2];
-        y_params_flat[3*PARAM_SIZE +: PARAM_SIZE] = y_params[3];
+        y_instructions_flat[0*3 +: 3] <= y_instructions[0];
+        y_instructions_flat[1*3 +: 3] <= y_instructions[1];
+        y_instructions_flat[2*3 +: 3] <= y_instructions[2];
+        y_instructions_flat[3*3 +: 3] <= y_instructions[3];
+        y_params_flat[0*PARAM_SIZE +: PARAM_SIZE] <= y_params[0];
+        y_params_flat[1*PARAM_SIZE +: PARAM_SIZE] <= y_params[1];
+        y_params_flat[2*PARAM_SIZE +: PARAM_SIZE] <= y_params[2];
+        y_params_flat[3*PARAM_SIZE +: PARAM_SIZE] <= y_params[3];
     end
     
+    
+
+
     triangle_wave_gen_fsm triangle1 (
         .clk(clk),
         .reset(reset),
@@ -189,3 +193,4 @@ module image_wave_gen (
 
 
 endmodule
+
