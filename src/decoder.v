@@ -282,7 +282,7 @@ module triangle_wave_gen_fsm_comb (
              if (reset) begin
                 action_state <= UP;
                 logic_state <= L_INIT;
-                cycle_flag <= 1'b0;
+                cycle_flag = 1'b0;
                 done_op <= 1'b0;
                 instruction_pointer <= 8'd0;
                 param_counter <= 8'd0;
