@@ -1,4 +1,5 @@
 
+
 // Instructions
 parameter C_NOP      = 3'd0;
 parameter C_LINE     = 3'd1;
@@ -13,214 +14,17 @@ parameter PARAM_SIZE = 8;
 parameter INSTRUCTION_COUNT = 8;
 parameter MAX_INSTRUCTIONS = 8'd7;
 
-module triangle_wave_gen_fsm (
-    input clk,
-    input reset, // Active high reset
-    input enable,
-    input [(INSTRUCTION_COUNT*3)-1:0] instructions_flat,
-    input [(INSTRUCTION_COUNT*8)-1:0] params_flat_a,
-    input [(INSTRUCTION_COUNT*8)-1:0] params_flat_b,
-    output [7:0] dac_out
-);
-
-    reg [7:0] counter;
-    reg [4:0] logic_state;
-    reg [2:0] action_state;
-    reg cycle_flag; // 0 for action cycle, 1 for check cycle
-    reg done_op;
-    
-    
-    // Annoying verilog formatting
-    wire [2:0] instructions[INSTRUCTION_COUNT-1:0];
-    wire [7:0] params_a[INSTRUCTION_COUNT-1:0];
-    wire [7:0] params_b[INSTRUCTION_COUNT-1:0];
-    reg [7:0] param_counter;
-    reg [INSTRUCTION_COUNT-1:0] instruction_pointer;
-
-    // Constants for clarity
-    parameter MAX_COUNTER_VALUE = 8'd255;  // Maximum value for 8-bit up count in decimal
-    parameter MIN_COUNTER_VALUE = 8'd0;    // Minimum value for 8-bit down count in decimal
-    parameter BOUNCE_VALUE      = 8'd128;
-
-    // Action states
-    parameter UP   = 2'b00;
-    parameter DOWN = 2'b01;
-    parameter HOLD = 2'b10;
-    parameter JUMP = 2'b11;
-    
-    // Logic states
-    parameter L_INIT   = 4'd0;
-    parameter L_ONE    = 4'd1;
-    parameter L_TWO    = 4'd2;
-    parameter L_THREE  = 4'd3;
-    parameter L_FOUR   = 4'd4;
-    parameter L_NOP    = 4'd15;
-
-    genvar i;
-    generate
-        for (i = 0; i < INSTRUCTION_COUNT; i = i + 1) begin
-            assign instructions[i] = instructions_flat[i*3 +: 3];
-            assign params_a[i] = params_flat_a[i*PARAM_SIZE +: PARAM_SIZE];
-            assign params_b[i] = params_flat_b[i*PARAM_SIZE +: PARAM_SIZE];
-        end
-    endgenerate
-
-    always @(posedge clk) begin
-        if (reset || !enable) begin
-            action_state <= UP;
-            logic_state = L_INIT;
-            cycle_flag = 1'b0;
-            done_op    = 1'b0;
-            instruction_pointer = 8'd0;
-            param_counter = 8'd0;
-        end else if (cycle_flag == 0) begin // Action cycle
-            case (action_state)
-                UP: counter = counter + 8'd1;
-                DOWN: counter = counter - 8'd1;
-                HOLD: counter = counter;
-            endcase
-            param_counter = param_counter + 8'd1; // Used by instructions to check when to finish
-            cycle_flag = 1; // Switch to check cycle
-        end else begin // Check cycle
-            
-            // Here we will pick an instruction to execture
-            case (instructions[instruction_pointer])
-                C_NOP: begin
-                    action_state <= HOLD;
-                    done_op = 1'b1;
-                end
-                C_LINE: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            if (params_a[instruction_pointer] > params_b[instruction_pointer]) begin
-                                action_state <= UP;
-                            end else begin
-                                action_state <= DOWN;
-                            end
-                            counter = params_a[instruction_pointer];
-                            logic_state = L_ONE;
-                            param_counter = 8'd0;
-                        end
-                        L_ONE: begin
-                            if (param_counter == params_b[instruction_pointer])
-                            begin
-                                //logic_state = L_NOP;
-                                action_state <= HOLD;
-                                done_op = 1'b1;
-                            end
-                        end
-                    endcase
-                end
-                C_JUMP: begin
-                    action_state <= HOLD;
-                    counter = params_a[instruction_pointer];
-                    done_op = 1'b1;
-                end
-                C_INCR: begin
-                    action_state <= UP;
-                    if (param_counter == params_a[instruction_pointer])
-                        done_op = 1'b1;
-                end
-                C_DCRE: begin
-                    action_state <= DOWN;
-                    if (param_counter == params_a[instruction_pointer])
-                        done_op = 1'b1;
-                end
-                C_X_RECT: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            action_state <= UP;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                logic_state = L_ONE;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_ONE: begin
-                            action_state <= HOLD;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                logic_state = L_TWO;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_TWO: begin
-                            action_state <= DOWN;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                logic_state = L_THREE;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_THREE: begin
-                            action_state <= HOLD;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                logic_state = L_NOP;
-                                param_counter = 4'd0;
-                                done_op = 1'b1;
-                            end
-                        end
-                    endcase
-                end
-                C_Y_RECT: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            action_state <= HOLD;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                logic_state = L_ONE;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_ONE: begin
-                            action_state <= UP;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                logic_state = L_TWO;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_TWO: begin
-                            action_state <= HOLD;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                logic_state = L_THREE;
-                                param_counter = 4'd0;
-                            end
-                        end
-                        L_THREE: begin
-                            action_state <= DOWN;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                logic_state = L_NOP;
-                                param_counter = 4'd0;
-                                done_op = 1'b1;
-                            end
-                        end
-                    endcase
-                end
-            endcase       
-    
-            // Check if this instruction is done
-            if (done_op == 1'b1) begin
-//                if (instruction_pointer == MAX_INSTRUCTIONS) instruction_pointer = 3'd0;
-//                else instruction_pointer = instruction_pointer + 8'd1;
-
-                instruction_pointer = instruction_pointer + 8'd1; // Loops
-                param_counter = 8'd0;
-                logic_state = L_INIT;
-
-                done_op = 1'b0;
-            end
-            cycle_flag = 0; // Switch back to action cycle
-        end
-    end
-
-    assign dac_out = counter;
-
-endmodule
 
 module triangle_wave_gen_fsm_comb (
     input clk,
     input reset, 
     input enable,
+    input ack,
     input [(INSTRUCTION_COUNT*3)-1:0] instructions_flat,
     input [(INSTRUCTION_COUNT*8)-1:0] params_flat_a,
     input [(INSTRUCTION_COUNT*8)-1:0] params_flat_b,
-    output reg [7:0] dac_out
+    output reg [7:0] dac_out,
+    output reg done_out
 );
 
     reg [7:0] counter;
@@ -284,6 +88,7 @@ module triangle_wave_gen_fsm_comb (
                 logic_state <= L_INIT;
                 cycle_flag = 1'b0;
                 done_op <= 1'b0;
+                done_out <= 1'b0;
                 instruction_pointer <= 8'd0;
                 param_counter <= 8'd0;
                 counter <= 8'd0;
@@ -293,6 +98,7 @@ module triangle_wave_gen_fsm_comb (
                 logic_state <= next_logic_state;
                 //cycle_flag <= next_cycle_flag;
                 done_op <= next_done_op;
+                done_out <= next_done_op;
                 instruction_pointer <= next_instruction_pointer;
                 param_counter <= next_param_counter;
                 counter <= next_counter;
@@ -310,132 +116,136 @@ module triangle_wave_gen_fsm_comb (
             next_counter = counter;
 
             case (action_state)
-              UP: next_counter = counter + 8'd1;
+                UP: next_counter = counter + 8'd1;
                 DOWN: next_counter = counter - 8'd1;
                 HOLD: next_counter = counter;
             endcase
             next_param_counter = param_counter + 8'd1; // Used by instructions to check when to finish
             // Here we will pick an instruction to execture
-            case (instructions[instruction_pointer])
-                C_NOP: begin
-                    next_action_state = HOLD;
-                    next_done_op = 1'b1;
-                end
-                C_LINE: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            if (params_a[instruction_pointer] > params_b[instruction_pointer]) begin
+            if (done_op == 1'b0) begin
+                case (instructions[instruction_pointer])
+                    C_NOP: begin
+                        next_action_state = HOLD;
+                        next_done_op = 1'b1;
+                    end
+                    C_LINE: begin
+                        case (logic_state)
+                            L_INIT: begin
+                                if (params_a[instruction_pointer] < params_b[instruction_pointer]) begin
+                                    next_action_state = UP;
+                                end else begin
+                                    next_action_state = DOWN;
+                                end
+                                next_counter = params_a[instruction_pointer];
+                                next_logic_state = L_ONE;
+                                next_param_counter = 8'd0;
+                            end
+                            L_ONE: begin
+                                if (param_counter == params_b[instruction_pointer])
+                                begin
+                                    //logic_state = L_NOP;
+                                    next_action_state = HOLD;
+                                    next_done_op = 1'b1;
+                                end
+                            end
+                        endcase
+                    end
+                    C_JUMP: begin
+                        next_action_state = HOLD;
+                        next_counter = params_a[instruction_pointer];
+                        next_done_op = 1'b1;
+                    end
+                    C_INCR: begin
+                        next_action_state = UP;
+                        if (param_counter == params_a[instruction_pointer])
+                            next_done_op = 1'b1;
+                    end
+                    C_DCRE: begin
+                        next_action_state = DOWN;
+                        if (param_counter == params_a[instruction_pointer])
+                            next_done_op = 1'b1;
+                    end
+                    C_X_RECT: begin
+                        case (logic_state)
+                            L_INIT: begin
                                 next_action_state = UP;
-                            end else begin
-                                next_action_state = DOWN;
+                                if (param_counter == params_a[instruction_pointer]) begin
+                                    next_logic_state = L_ONE;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                            next_counter = params_a[instruction_pointer];
-                            next_logic_state = L_ONE;
-                            next_param_counter = 8'd0;
-                        end
-                        L_ONE: begin
-                            if (param_counter == params_b[instruction_pointer])
-                            begin
-                                //logic_state = L_NOP;
+                            L_ONE: begin
                                 next_action_state = HOLD;
-                                next_done_op = 1'b1;
+                                if (param_counter == params_b[instruction_pointer]) begin
+                                    next_logic_state = L_TWO;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                        end
-                    endcase
-                end
-                C_JUMP: begin
-                    next_action_state = HOLD;
-                    next_counter = params_a[instruction_pointer];
-                    next_done_op = 1'b1;
-                end
-                C_INCR: begin
-                    next_action_state = UP;
-                    if (param_counter == params_a[instruction_pointer])
-                        next_done_op = 1'b1;
-                end
-                C_DCRE: begin
-                    next_action_state = DOWN;
-                    if (param_counter == params_a[instruction_pointer])
-                        next_done_op = 1'b1;
-                end
-                C_X_RECT: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            next_action_state = UP;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                next_logic_state = L_ONE;
-                                next_param_counter = 4'd0;
+                            L_TWO: begin
+                                next_action_state = DOWN;
+                                if (param_counter == params_a[instruction_pointer]) begin
+                                    next_logic_state = L_THREE;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                        end
-                        L_ONE: begin
-                            next_action_state = HOLD;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                next_logic_state = L_TWO;
-                                next_param_counter = 4'd0;
+                            L_THREE: begin
+                                next_action_state = HOLD;
+                                if (param_counter == params_b[instruction_pointer]) begin
+                                    next_logic_state = L_NOP;
+                                    next_param_counter = 4'd0;
+                                    next_done_op = 1'b1;
+                                end
                             end
-                        end
-                        L_TWO: begin
-                            next_action_state = DOWN;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                next_logic_state = L_THREE;
-                                next_param_counter = 4'd0;
+                        endcase
+                    end
+                    C_Y_RECT: begin
+                        case (logic_state)
+                            L_INIT: begin
+                                next_action_state = HOLD;
+                                if (param_counter == params_a[instruction_pointer]) begin
+                                    next_logic_state = L_ONE;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                        end
-                        L_THREE: begin
-                            next_action_state = HOLD;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                next_logic_state = L_NOP;
-                                next_param_counter = 4'd0;
-                                next_done_op = 1'b1;
+                            L_ONE: begin
+                                next_action_state = UP;
+                                if (param_counter == params_b[instruction_pointer]) begin
+                                    next_logic_state = L_TWO;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                        end
-                    endcase
-                end
-                C_Y_RECT: begin
-                    case (logic_state)
-                        L_INIT: begin
-                            next_action_state = HOLD;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                next_logic_state = L_ONE;
-                                next_param_counter = 4'd0;
+                            L_TWO: begin
+                                next_action_state = HOLD;
+                                if (param_counter == params_a[instruction_pointer]) begin
+                                    next_logic_state = L_THREE;
+                                    next_param_counter = 4'd0;
+                                end
                             end
-                        end
-                        L_ONE: begin
-                            next_action_state = UP;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                next_logic_state = L_TWO;
-                                next_param_counter = 4'd0;
+                            L_THREE: begin
+                                next_action_state = DOWN;
+                                if (param_counter == params_b[instruction_pointer]) begin
+                                    next_logic_state = L_NOP;
+                                    next_param_counter = 4'd0;
+                                    next_done_op = 1'b1;
+                                end
                             end
-                        end
-                        L_TWO: begin
-                            next_action_state = HOLD;
-                            if (param_counter == params_a[instruction_pointer]) begin
-                                next_logic_state = L_THREE;
-                                next_param_counter = 4'd0;
-                            end
-                        end
-                        L_THREE: begin
-                            next_action_state = DOWN;
-                            if (param_counter == params_b[instruction_pointer]) begin
-                                next_logic_state = L_NOP;
-                                next_param_counter = 4'd0;
-                                next_done_op = 1'b1;
-                            end
-                        end
-                    endcase
-                end
-            endcase       
-    
+                        endcase
+                    end
+                endcase       
+           end else begin
             // Check if this instruction is done
-            if (done_op == 1'b1) begin
+            
 //                if (instruction_pointer == MAX_INSTRUCTIONS) instruction_pointer = 3'd0;
 //                else instruction_pointer = instruction_pointer + 8'd1;
-
-                next_instruction_pointer = instruction_pointer + 8'd1; // Loops
+               
                 next_param_counter = 8'd0;
                 next_logic_state = L_INIT;
-
-                next_done_op = 1'b0;
+                next_action_state = HOLD;
+            
+                if (ack) begin
+                     next_instruction_pointer = instruction_pointer + 8'd1; // Loops
+                     next_done_op = 1'b0;
+                end
             end
             cycle_flag = 0; // Switch back to action cycle
         end
@@ -444,7 +254,7 @@ endmodule
 
 
 
-// RX code from fpga4fun.com, all credit to them!! :) :) THANKS GUYS
+// RX code from fpga4fun.com, all credit to them!! :) :) Permission for use in tiny tapeout given over email
 ////////////////////////////////////////////////////////
 module async_receiver(
 	input clk,
@@ -557,7 +367,7 @@ module BaudTickGen(
 );
 parameter ClkFrequency = 10000000;
 parameter Baud = 115200;
-parameter Oversampling = 1;
+parameter Oversampling = 8;
 
 function integer log2(input integer v); begin log2=0; while(v>>log2) log2=log2+1; end endfunction
 localparam AccWidth = log2(ClkFrequency/Baud)+8;  // +/- 2% max timing error over a byte
@@ -569,56 +379,205 @@ assign tick = Acc[AccWidth];
 endmodule
 
 
+module instruction_reader(
+    input clk,
+    input reset,
+    input uart_rx_wire,
+    output reg [(INSTRUCTION_COUNT*3)-1:0] x_instructions_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] x_params_a_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] x_params_b_flat,
+    output reg [(INSTRUCTION_COUNT*3)-1:0] y_instructions_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] y_params_a_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] y_params_b_flat,
+    output reg data_valid
+);
+
+    // FSM states
+    parameter IDLE = 2'd0;
+    parameter TYPE_DETECTION = 2'd1;
+    parameter DATA_RECEIVE = 2'd2;
+    parameter END_DETECTION = 2'd3;
+    
+    // Instantiate UART RX module
+    wire rx_data_ready;
+    wire [7:0]rx_data_r;
+    reg [7:0]rx_data_out;
+    
+    always @(posedge clk) begin
+        if (reset)
+            rx_data_out <= 8'd0;
+        else if (rx_data_ready)
+            rx_data_out <= rx_data_r;
+    end
+    
+    async_receiver uart_rx_m(
+        .clk(clk),
+        .RxD(uart_rx_wire),
+        .RxD_data_ready(rx_data_ready),
+        .RxD_data(rx_data_r),
+        .RxD_idle(idle),
+        .RxD_endofpacket(eop)
+    );
+    
+    reg [1:0] current_state, next_state;
+    reg [2:0] data_type;
+    reg [7:0] byte_count;
+    reg RxD_endofpacket;
+    
+    // FSM logic
+    always @(posedge clk) begin
+        if (reset) begin
+            current_state <= IDLE;
+            byte_count <= 8'd0;
+            RxD_endofpacket <= 1'b0;
+            data_valid <= 1'd0;
+        end else begin
+            current_state <= next_state;
+            if (rx_data_ready) begin
+                case (current_state)
+                    IDLE: begin
+                        if (rx_data_out == 8'hAA) 
+                            next_state <= TYPE_DETECTION;
+                        else
+                            next_state <= IDLE;
+                    end
+                    TYPE_DETECTION: begin
+                        data_type <= rx_data_out[2:0]; // Extracting the 3 least significant bits as type
+                        byte_count <= 8'd0;
+                        next_state <= DATA_RECEIVE;
+                        data_valid <= 1'd0;
+                    end
+                    DATA_RECEIVE: begin
+                        case (data_type)
+                            3'b001: x_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
+                            3'b010: x_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'b011: x_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'b100: y_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
+                            3'b101: y_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'b110: y_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
+                        endcase
+                        byte_count <= byte_count + 1;
+                        if (byte_count == INSTRUCTION_COUNT-1) 
+                            next_state <= END_DETECTION;
+                        else
+                            next_state <= DATA_RECEIVE;
+                    end
+                    END_DETECTION: begin
+                        if (rx_data_out == 8'h55) begin
+                            RxD_endofpacket <= 1;
+                            next_state <= IDLE;
+                            data_valid <= 1'd1;
+                        end else 
+                            next_state <= DATA_RECEIVE; // If it's not end byte, continue to collect data
+                    end
+                endcase
+            end
+        end
+    end
+
+
+    always @(posedge clk) begin
+        if (reset)
+            RxD_endofpacket <= 0;
+        else if (RxD_endofpacket)
+            RxD_endofpacket <= 0;
+    end
+endmodule
+
+
 module image_wave_gen (
     input clk,
+    input ten_clk,
     input reset, // Active high reset
-    input [7:0]uart_rx,
+    input enable,
+    input uart_rx_wire,
     output [7:0] xdac,
     output [7:0] ydac
 );
 
-    reg [(INSTRUCTION_COUNT*3)-1:0] x_instructions_flat;
-    reg [(INSTRUCTION_COUNT*8)-1:0] x_params_a_flat;
-    reg [(INSTRUCTION_COUNT*8)-1:0] x_params_b_flat;
+    wire [(INSTRUCTION_COUNT*3)-1:0] x_instructions_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] x_params_a_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] x_params_b_flat;
         
-    reg [(INSTRUCTION_COUNT*3)-1:0] y_instructions_flat;
-    reg [(INSTRUCTION_COUNT*8)-1:0] y_params_a_flat;
-    reg [(INSTRUCTION_COUNT*8)-1:0] y_params_b_flat;
-    reg enable = 0;
+    wire [(INSTRUCTION_COUNT*3)-1:0] y_instructions_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] y_params_a_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] y_params_b_flat;
     
+    wire data_valid;
+    
+    
+    reg done_triangle1;
+    wire done_triangle1_wire;
+    reg done_triangle2;
+    wire done_triangle2_wire;
+    reg ack_triangle1;
+    reg ack_triangle2;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            ack_triangle1 <= 0;
+            ack_triangle2 <= 0;
+        end else begin
+            done_triangle1 = done_triangle1_wire;
+            done_triangle2 = done_triangle2_wire;
+            if (done_triangle1 && done_triangle2) begin
+                ack_triangle1 <= 1;
+                ack_triangle2 <= 1;
+            end else begin
+                ack_triangle1 <= 0;
+                ack_triangle2 <= 0;
+            end
+        end
+    end
+    
+     instruction_reader serial_reader (
+        .clk(ten_clk),
+        .reset(reset),
+        .uart_rx_wire(uart_rx_wire),
+        .x_instructions_flat(x_instructions_flat),
+        .x_params_a_flat(x_params_a_flat),
+        .x_params_b_flat(x_params_b_flat),
+        .y_instructions_flat(y_instructions_flat),
+        .y_params_a_flat(y_params_a_flat),
+        .y_params_b_flat(y_params_b_flat),
+        .data_valid(data_valid)
+    );
     
     
     // DONT ASSUME IT'LL START FROM 0 LIKE ON THE FPGA
-    always @(posedge clk) begin
-        x_instructions_flat   = {C_X_RECT, C_JUMP, C_X_RECT, C_JUMP, C_X_RECT, C_JUMP, C_X_RECT, C_JUMP};
-        x_params_a_flat       = {8'd100,   8'd150, 8'd75,    8'd100, uart_rx,   8'd030, 8'd90, 8'd000};
-        x_params_b_flat       = {8'd100,   8'd150, 8'd75,    8'd100, uart_rx,   8'd030, 8'd90, 8'd000};
+//    always @(posedge clk) begin
+//        x_instructions_flat   = {C_X_RECT, C_JUMP, C_LINE, C_JUMP, C_X_RECT, C_JUMP, C_X_RECT, C_JUMP};
+//        x_params_a_flat       = {8'd100,   8'd150, 8'd30,    8'd100, 8'd090,   8'd030, 8'd90, 8'd000};
+//        x_params_b_flat       = {8'd100,   8'd150, 8'd60,    8'd100, 8'd090,   8'd030, 8'd90, 8'd000};
         
-        y_instructions_flat   = {C_Y_RECT, C_JUMP, C_Y_RECT, C_JUMP, C_Y_RECT, C_JUMP, C_Y_RECT, C_JUMP};
-        y_params_a_flat       = {8'd100,   8'd150, 8'd75,    8'd020, uart_rx,   8'd000, 8'd90, 8'd000};
-        y_params_b_flat       = {8'd100,   8'd150, 8'd75,    8'd020, uart_rx,   8'd000, 8'd90, 8'd000};
-        enable = 1;
-    end
+//        y_instructions_flat   = {C_Y_RECT, C_JUMP, C_LINE, C_JUMP, C_Y_RECT, C_JUMP, C_Y_RECT, C_JUMP};
+//        y_params_a_flat       = {8'd100,   8'd150, 8'd90,    8'd020, 8'd090,   8'd000, 8'd90, 8'd000};
+//        y_params_b_flat       = {8'd100,   8'd150, 8'd60,    8'd020, 8'd090,   8'd000, 8'd90, 8'd000};
+//    end
 
     
     triangle_wave_gen_fsm_comb triangle1 (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+        .ack(ack_triangle1),
         .instructions_flat(x_instructions_flat),
         .params_flat_a(x_params_a_flat),
         .params_flat_b(x_params_b_flat),
-        .dac_out(xdac)
+        .dac_out(xdac),
+        .done_out(done_triangle1_wire)
     );
     
     triangle_wave_gen_fsm_comb triangle2 (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+        .ack(ack_triangle2),
         .instructions_flat(y_instructions_flat),
         .params_flat_a(y_params_a_flat),
         .params_flat_b(y_params_b_flat),
-        .dac_out(ydac)
+        .dac_out(ydac),
+        .done_out(done_triangle2_wire)
     );
 
 
