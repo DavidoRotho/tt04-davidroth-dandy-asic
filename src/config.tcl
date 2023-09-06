@@ -11,6 +11,10 @@ set script_dir [file dirname [file normalize [info script]]]
 # - the list of source files
 source $::env(DESIGN_DIR)/user_config.tcl
 
+# pack it in
+set ::env(PL_TARGET_DENSITY) 0.74
+
+
 # save some time
 set ::env(RUN_KLAYOUT_XOR) 0
 set ::env(RUN_KLAYOUT_DRC) 0
