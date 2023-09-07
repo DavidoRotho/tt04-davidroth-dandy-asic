@@ -11,8 +11,8 @@ parameter C_Y_RECT   = 3'd6;
 
 // Meta
 parameter PARAM_SIZE = 8;
-parameter INSTRUCTION_COUNT = 8;
-parameter MAX_INSTRUCTIONS = 8'd7;
+parameter INSTRUCTION_COUNT = 16;
+parameter MAX_INSTRUCTIONS = 8'd15;
 
 
 module triangle_wave_gen_fsm_comb (
@@ -93,7 +93,7 @@ module triangle_wave_gen_fsm_comb (
                 param_counter <= 8'd0;
                 counter <= 8'd0;
                 dac_out <= 8'd0;
-            end else if (enable) begin
+            end else begin
                 action_state <= next_action_state;
                 logic_state <= next_logic_state;
                 //cycle_flag <= next_cycle_flag;
@@ -106,7 +106,7 @@ module triangle_wave_gen_fsm_comb (
             end
 
             cycle_flag = 1; // Switch to check cycle
-        end else begin // Check cycle
+        end else if (enable) begin // Check cycle
             next_action_state = action_state;
             next_logic_state = logic_state;
             next_cycle_flag = cycle_flag;
@@ -463,10 +463,11 @@ module instruction_reader(
                             next_state <= DATA_RECEIVE;
                     end
                     END_DETECTION: begin
+                        data_valid <= 1'd1;
                         if (rx_data_out == 8'h55) begin
                             RxD_endofpacket <= 1;
                             next_state <= IDLE;
-                            data_valid <= 1'd1;
+                            
                         end else 
                             next_state <= DATA_RECEIVE; // If it's not end byte, continue to collect data
                     end
@@ -559,7 +560,7 @@ module image_wave_gen (
     triangle_wave_gen_fsm_comb triangle1 (
         .clk(clk),
         .reset(reset),
-        .enable(enable),
+        .enable(data_valid || enable),
         .ack(ack_triangle1),
         .instructions_flat(x_instructions_flat),
         .params_flat_a(x_params_a_flat),
@@ -571,7 +572,7 @@ module image_wave_gen (
     triangle_wave_gen_fsm_comb triangle2 (
         .clk(clk),
         .reset(reset),
-        .enable(enable),
+        .enable(data_valid || enable),
         .ack(ack_triangle2),
         .instructions_flat(y_instructions_flat),
         .params_flat_a(y_params_a_flat),
