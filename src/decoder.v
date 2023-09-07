@@ -420,6 +420,7 @@ module instruction_reader(
     wire rx_data_ready;
     wire [7:0]rx_data_r;
     reg [7:0]rx_data_out;
+    reg idle, eop;
     
     always @(posedge clk) begin
         if (reset)
