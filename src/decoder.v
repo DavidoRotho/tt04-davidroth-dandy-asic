@@ -8,6 +8,7 @@ parameter C_DCRE     = 3'd3;
 parameter C_JUMP     = 3'd4;
 parameter C_X_RECT   = 3'd5;
 parameter C_Y_RECT   = 3'd6;
+parameter C_LINE_D   = 3'd7;
 
 // Meta
 parameter PARAM_SIZE = 8;
@@ -23,6 +24,7 @@ module triangle_wave_gen_fsm_comb (
     input [(INSTRUCTION_COUNT*3)-1:0] instructions_flat,
     input [(INSTRUCTION_COUNT*8)-1:0] params_flat_a,
     input [(INSTRUCTION_COUNT*8)-1:0] params_flat_b,
+    input [(INSTRUCTION_COUNT*8)-1:0] params_flat_c,
     output reg [7:0] dac_out,
     output reg done_out
 );
@@ -37,6 +39,7 @@ module triangle_wave_gen_fsm_comb (
     wire [2:0] instructions[INSTRUCTION_COUNT-1:0];
     wire [7:0] params_a[INSTRUCTION_COUNT-1:0];
     wire [7:0] params_b[INSTRUCTION_COUNT-1:0];
+    wire [7:0] params_c[INSTRUCTION_COUNT-1:0];
     reg [7:0] param_counter, next_param_counter;
     reg [INSTRUCTION_COUNT-1:0] instruction_pointer, next_instruction_pointer;
     
@@ -65,6 +68,7 @@ module triangle_wave_gen_fsm_comb (
             assign instructions[i] = instructions_flat[i*3 +: 3];
             assign params_a[i] = params_flat_a[i*PARAM_SIZE +: PARAM_SIZE];
             assign params_b[i] = params_flat_b[i*PARAM_SIZE +: PARAM_SIZE];
+            assign params_c[i] = params_flat_c[i*PARAM_SIZE +: PARAM_SIZE];
         end
     endgenerate
 
@@ -116,8 +120,8 @@ module triangle_wave_gen_fsm_comb (
             next_counter = counter;
 
             case (action_state)
-                UP: next_counter = counter + 8'd1;
-                DOWN: next_counter = counter - 8'd1;
+                UP: next_counter = counter + params_c[instruction_pointer];
+                DOWN: next_counter = counter - params_c[instruction_pointer];
                 HOLD: next_counter = counter;
             endcase
             next_param_counter = param_counter + 8'd1; // Used by instructions to check when to finish
@@ -131,18 +135,30 @@ module triangle_wave_gen_fsm_comb (
                     C_LINE: begin
                         case (logic_state)
                             L_INIT: begin
-                                if (params_a[instruction_pointer] < params_b[instruction_pointer]) begin
-                                    next_action_state = UP;
-                                end else begin
-                                    next_action_state = DOWN;
-                                end
+                                next_action_state = UP;
                                 next_counter = params_a[instruction_pointer];
                                 next_logic_state = L_ONE;
                                 next_param_counter = 8'd0;
                             end
-                            L_ONE: begin
-                                if (param_counter == params_b[instruction_pointer])
-                                begin
+                            L_ONE: begin                      
+                                if (param_counter == params_b[instruction_pointer]) begin
+                                    //logic_state = L_NOP;
+                                    next_action_state = HOLD;
+                                    next_done_op = 1'b1;
+                                end
+                            end
+                        endcase
+                    end
+                    C_LINE_D: begin
+                        case (logic_state)
+                            L_INIT: begin
+                                next_action_state = DOWN;
+                                next_counter = params_a[instruction_pointer];
+                                next_logic_state = L_ONE;
+                                next_param_counter = 8'd0;
+                            end
+                            L_ONE: begin                      
+                                if (param_counter == params_b[instruction_pointer]) begin
                                     //logic_state = L_NOP;
                                     next_action_state = HOLD;
                                     next_done_op = 1'b1;
@@ -270,7 +286,7 @@ module async_receiver(
 );
 
 parameter ClkFrequency = 10000000; // 10MHz
-parameter Baud = 115200;
+parameter Baud = 921600;
 
 parameter Oversampling = 8;  // needs to be a power of 2
 // we oversample the RxD line at a fixed rate to capture each RxD data bit at the "right" time
@@ -366,7 +382,7 @@ module BaudTickGen(
 	output tick  // generate a tick at the specified baud rate * oversampling
 );
 parameter ClkFrequency = 10000000;
-parameter Baud = 115200;
+parameter Baud = 921600;
 parameter Oversampling = 8;
 
 function integer log2(input integer v); begin log2=0; while(v>>log2) log2=log2+1; end endfunction
@@ -386,9 +402,11 @@ module instruction_reader(
     output reg [(INSTRUCTION_COUNT*3)-1:0] x_instructions_flat,
     output reg [(INSTRUCTION_COUNT*8)-1:0] x_params_a_flat,
     output reg [(INSTRUCTION_COUNT*8)-1:0] x_params_b_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] x_params_c_flat,
     output reg [(INSTRUCTION_COUNT*3)-1:0] y_instructions_flat,
     output reg [(INSTRUCTION_COUNT*8)-1:0] y_params_a_flat,
     output reg [(INSTRUCTION_COUNT*8)-1:0] y_params_b_flat,
+    output reg [(INSTRUCTION_COUNT*8)-1:0] y_params_c_flat,
     output reg data_valid
 );
 
@@ -449,12 +467,14 @@ module instruction_reader(
                     end
                     DATA_RECEIVE: begin
                         case (data_type)
-                            3'b001: x_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
-                            3'b010: x_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
-                            3'b011: x_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
-                            3'b100: y_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
-                            3'b101: y_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
-                            3'b110: y_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd0: x_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
+                            3'd1: x_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd2: x_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd3: x_params_c_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd4: y_instructions_flat[byte_count*3 +: 3] <= rx_data_out[2:0];
+                            3'd5: y_params_a_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd6: y_params_b_flat[byte_count*8 +: 8] <= rx_data_out;
+                            3'd7: y_params_c_flat[byte_count*8 +: 8] <= rx_data_out;
                         endcase
                         byte_count <= byte_count + 1;
                         if (byte_count == INSTRUCTION_COUNT-1) 
@@ -499,10 +519,13 @@ module image_wave_gen (
     wire [(INSTRUCTION_COUNT*3)-1:0] x_instructions_flat;
     wire [(INSTRUCTION_COUNT*8)-1:0] x_params_a_flat;
     wire [(INSTRUCTION_COUNT*8)-1:0] x_params_b_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] x_params_c_flat;
         
     wire [(INSTRUCTION_COUNT*3)-1:0] y_instructions_flat;
     wire [(INSTRUCTION_COUNT*8)-1:0] y_params_a_flat;
     wire [(INSTRUCTION_COUNT*8)-1:0] y_params_b_flat;
+    wire [(INSTRUCTION_COUNT*8)-1:0] y_params_c_flat;
+    
     
     wire data_valid;
     
@@ -538,9 +561,11 @@ module image_wave_gen (
         .x_instructions_flat(x_instructions_flat),
         .x_params_a_flat(x_params_a_flat),
         .x_params_b_flat(x_params_b_flat),
+        .x_params_c_flat(x_params_c_flat),
         .y_instructions_flat(y_instructions_flat),
         .y_params_a_flat(y_params_a_flat),
         .y_params_b_flat(y_params_b_flat),
+        .y_params_c_flat(y_params_c_flat),
         .data_valid(data_valid)
     );
     
@@ -565,6 +590,7 @@ module image_wave_gen (
         .instructions_flat(x_instructions_flat),
         .params_flat_a(x_params_a_flat),
         .params_flat_b(x_params_b_flat),
+        .params_flat_c(x_params_c_flat),
         .dac_out(xdac),
         .done_out(done_triangle1_wire)
     );
@@ -577,6 +603,7 @@ module image_wave_gen (
         .instructions_flat(y_instructions_flat),
         .params_flat_a(y_params_a_flat),
         .params_flat_b(y_params_b_flat),
+        .params_flat_c(y_params_c_flat),
         .dac_out(ydac),
         .done_out(done_triangle2_wire)
     );
