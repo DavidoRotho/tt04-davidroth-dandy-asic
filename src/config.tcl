@@ -12,7 +12,7 @@ set script_dir [file dirname [file normalize [info script]]]
 source $::env(DESIGN_DIR)/user_config.tcl
 
 # pack it in
-# set ::env(PL_TARGET_DENSITY) 0.74
+set ::env(PL_TARGET_DENSITY) 0.70
 
 
 # save some time
