@@ -1,5 +1,4 @@
 
-
 // Instructions
 parameter C_NOP      = 3'd0;
 parameter C_LINE     = 3'd1;
@@ -420,7 +419,7 @@ module instruction_reader(
     wire rx_data_ready;
     wire [7:0]rx_data_r;
     reg [7:0]rx_data_out;
-    reg idle, eop;
+    wire idle_r, eop;
     
     always @(posedge clk) begin
         if (reset)
@@ -434,7 +433,7 @@ module instruction_reader(
         .RxD(uart_rx_wire),
         .RxD_data_ready(rx_data_ready),
         .RxD_data(rx_data_r),
-        .RxD_idle(idle),
+        .RxD_idle(idle_r),
         .RxD_endofpacket(eop)
     );
     
